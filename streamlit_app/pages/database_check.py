@@ -63,12 +63,46 @@ try:
                     if doc.get('dimensions'):
                         st.write(f"**Dimensions:** {doc['dimensions']}")
 
-                    # View full details button
-                    if f"show_details_{doc['id']}" not in st.session_state:
-                        st.session_state[f"show_details_{doc['id']}"] = False
+                    # View full details and delete buttons
+                    col_btn1, col_btn2 = st.columns(2)
 
-                    if st.button(f"View Full Details", key=f"view_{doc['id']}"):
-                        st.session_state[f"show_details_{doc['id']}"] = not st.session_state[f"show_details_{doc['id']}"]
+                    with col_btn1:
+                        if f"show_details_{doc['id']}" not in st.session_state:
+                            st.session_state[f"show_details_{doc['id']}"] = False
+
+                        if st.button(f"View Full Details", key=f"view_{doc['id']}"):
+                            st.session_state[f"show_details_{doc['id']}"] = not st.session_state[f"show_details_{doc['id']}"]
+
+                    with col_btn2:
+                        if f"confirm_delete_{doc['id']}" not in st.session_state:
+                            st.session_state[f"confirm_delete_{doc['id']}"] = False
+
+                        if st.session_state[f"confirm_delete_{doc['id']}"]:
+                            st.warning(f"⚠️ Are you sure you want to delete document {doc['id']}?")
+                            col_yes, col_no = st.columns(2)
+                            with col_yes:
+                                if st.button("Yes, Delete", key=f"yes_delete_{doc['id']}", type="primary"):
+                                    try:
+                                        delete_response = requests.delete(f"{API_BASE_URL}/documents/{doc['id']}", timeout=10)
+                                        if delete_response.status_code == 200:
+                                            st.success(f"✅ Document {doc['id']} deleted successfully")
+                                            st.session_state[f"confirm_delete_{doc['id']}"] = False
+                                            safe_rerun()
+                                        else:
+                                            error_detail = delete_response.json().get("detail", "Unknown error") if delete_response.status_code != 200 else delete_response.text
+                                            st.error(f"❌ Error: {error_detail}")
+                                            st.session_state[f"confirm_delete_{doc['id']}"] = False
+                                    except Exception as e:
+                                        st.error(f"❌ Error: {str(e)}")
+                                        st.session_state[f"confirm_delete_{doc['id']}"] = False
+                            with col_no:
+                                if st.button("Cancel", key=f"no_delete_{doc['id']}"):
+                                    st.session_state[f"confirm_delete_{doc['id']}"] = False
+                                    safe_rerun()
+                        else:
+                            if st.button("🗑️ Delete", key=f"delete_{doc['id']}"):
+                                st.session_state[f"confirm_delete_{doc['id']}"] = True
+                                safe_rerun()
 
                     if st.session_state[f"show_details_{doc['id']}"]:
                         try:

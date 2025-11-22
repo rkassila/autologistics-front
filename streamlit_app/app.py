@@ -18,6 +18,25 @@ def safe_rerun():
         st.experimental_rerun()
 
 
+def normalize_value(value):
+    """Normalize a value for comparison (handle None, empty strings, dates)."""
+    if value is None:
+        return None
+    # Handle date objects - convert to string for comparison
+    if hasattr(value, 'isoformat'):  # date or datetime objects
+        return value.isoformat()
+    if isinstance(value, str):
+        return value.strip() if value.strip() else None
+    return str(value) if value else None
+
+
+def compare_values(original, current):
+    """Compare two values and return True if they're different."""
+    orig_norm = normalize_value(original)
+    curr_norm = normalize_value(current)
+    return orig_norm != curr_norm
+
+
 st.set_page_config(page_title="Logistics Document Processor", layout="wide", page_icon="📦")
 st.title("📦 Logistics Document Automation")
 
@@ -105,6 +124,9 @@ if uploaded_file and st.session_state.extracted_data is None:
                     st.session_state.extracted_data = response_data
                     st.session_state.document_hash = response_data.get("document_hash")
                     st.session_state.filename = uploaded_file.name
+                    # Store original values for comparison
+                    original_fields = response_data.get("structured_fields", {})
+                    st.session_state.original_fields = original_fields.copy()
                     safe_rerun()
                 else:
                     # Parse error response
@@ -131,6 +153,10 @@ if st.session_state.extracted_data:
     else:
         fields = result.get("structured_fields", {})
 
+        # Initialize original_fields if not set (for backward compatibility)
+        if "original_fields" not in st.session_state:
+            st.session_state.original_fields = fields.copy()
+
         # Show message if document already exists in DB - display BEFORE form
         if already_exists:
             st.warning("⚠️ document already in db", icon="⚠️")
@@ -138,28 +164,79 @@ if st.session_state.extracted_data:
         with st.form("review_form"):
             st.subheader("Review Extracted Fields")
 
+            # Get original fields for comparison
+            original_fields = st.session_state.original_fields
+
             col1, col2 = st.columns(2)
 
             with col1:
+                shipper_name_val = st.text_input("Shipper Name", value=fields.get("shipper_name") or "", disabled=already_exists, key="shipper_name_input")
+                if compare_values(original_fields.get("shipper_name"), shipper_name_val):
+                    st.caption("✏️ Modified")
+
+                shipper_address_val = st.text_area("Shipper Address", value=fields.get("shipper_address") or "", disabled=already_exists, key="shipper_address_input")
+                if compare_values(original_fields.get("shipper_address"), shipper_address_val):
+                    st.caption("✏️ Modified")
+
+                receiver_name_val = st.text_input("Receiver Name", value=fields.get("receiver_name") or "", disabled=already_exists, key="receiver_name_input")
+                if compare_values(original_fields.get("receiver_name"), receiver_name_val):
+                    st.caption("✏️ Modified")
+
+                receiver_address_val = st.text_area("Receiver Address", value=fields.get("receiver_address") or "", disabled=already_exists, key="receiver_address_input")
+                if compare_values(original_fields.get("receiver_address"), receiver_address_val):
+                    st.caption("✏️ Modified")
+
                 reviewed_fields = {
-                    "shipper_name": st.text_input("Shipper Name", value=fields.get("shipper_name") or "", disabled=already_exists),
-                    "shipper_address": st.text_area("Shipper Address", value=fields.get("shipper_address") or "", disabled=already_exists),
-                    "receiver_name": st.text_input("Receiver Name", value=fields.get("receiver_name") or "", disabled=already_exists),
-                    "receiver_address": st.text_area("Receiver Address", value=fields.get("receiver_address") or "", disabled=already_exists),
+                    "shipper_name": shipper_name_val,
+                    "shipper_address": shipper_address_val,
+                    "receiver_name": receiver_name_val,
+                    "receiver_address": receiver_address_val,
                 }
 
             with col2:
+                tracking_number_val = st.text_input("Tracking Number", value=fields.get("tracking_number") or "", disabled=already_exists, key="tracking_number_input")
+                if compare_values(original_fields.get("tracking_number"), tracking_number_val):
+                    st.caption("✏️ Modified")
+
+                carrier_val = st.text_input("Carrier", value=fields.get("carrier") or "", disabled=already_exists, key="carrier_input")
+                if compare_values(original_fields.get("carrier"), carrier_val):
+                    st.caption("✏️ Modified")
+
+                weight_val = st.text_input("Weight", value=fields.get("weight") or "", disabled=already_exists, key="weight_input")
+                if compare_values(original_fields.get("weight"), weight_val):
+                    st.caption("✏️ Modified")
+
+                dimensions_val = st.text_input("Dimensions", value=fields.get("dimensions") or "", disabled=already_exists, key="dimensions_input")
+                if compare_values(original_fields.get("dimensions"), dimensions_val):
+                    st.caption("✏️ Modified")
+
+                status_val = st.text_input("Status", value=fields.get("status") or "", disabled=already_exists, key="status_input")
+                if compare_values(original_fields.get("status"), status_val):
+                    st.caption("✏️ Modified")
+
+                shipment_date_val = st.text_input("Shipment Date", value=str(fields.get("shipment_date")) if fields.get("shipment_date") else "", disabled=already_exists, key="shipment_date_input")
+                if compare_values(original_fields.get("shipment_date"), shipment_date_val):
+                    st.caption("✏️ Modified")
+
+                delivery_date_val = st.text_input("Delivery Date", value=str(fields.get("delivery_date")) if fields.get("delivery_date") else "", disabled=already_exists, key="delivery_date_input")
+                if compare_values(original_fields.get("delivery_date"), delivery_date_val):
+                    st.caption("✏️ Modified")
+
                 reviewed_fields.update({
-                    "tracking_number": st.text_input("Tracking Number", value=fields.get("tracking_number") or "", disabled=already_exists),
-                    "carrier": st.text_input("Carrier", value=fields.get("carrier") or "", disabled=already_exists),
-                    "weight": st.text_input("Weight", value=fields.get("weight") or "", disabled=already_exists),
-                    "dimensions": st.text_input("Dimensions", value=fields.get("dimensions") or "", disabled=already_exists),
-                    "status": st.text_input("Status", value=fields.get("status") or "", disabled=already_exists),
-                    "shipment_date": st.text_input("Shipment Date", value=str(fields.get("shipment_date")) if fields.get("shipment_date") else "", disabled=already_exists),
-                    "delivery_date": st.text_input("Delivery Date", value=str(fields.get("delivery_date")) if fields.get("delivery_date") else "", disabled=already_exists),
+                    "tracking_number": tracking_number_val,
+                    "carrier": carrier_val,
+                    "weight": weight_val,
+                    "dimensions": dimensions_val,
+                    "status": status_val,
+                    "shipment_date": shipment_date_val,
+                    "delivery_date": delivery_date_val,
                 })
 
-            reviewed_fields["special_instructions"] = st.text_area("Special Instructions", value=fields.get("special_instructions") or "", disabled=already_exists)
+            special_instructions_val = st.text_area("Special Instructions", value=fields.get("special_instructions") or "", disabled=already_exists, key="special_instructions_input")
+            if compare_values(original_fields.get("special_instructions"), special_instructions_val):
+                st.caption("✏️ Modified")
+
+            reviewed_fields["special_instructions"] = special_instructions_val
 
             col1, col2 = st.columns(2)
             with col1:
@@ -188,6 +265,7 @@ if st.session_state.extracted_data:
                             st.session_state.extracted_data = None
                             st.session_state.document_hash = None
                             st.session_state.filename = None
+                            st.session_state.original_fields = None
                             st.session_state.save_success = True
                             safe_rerun()
                         elif response.status_code == 400:
@@ -222,4 +300,5 @@ if st.session_state.extracted_data:
                 st.session_state.extracted_data = None
                 st.session_state.document_hash = None
                 st.session_state.filename = None
+                st.session_state.original_fields = None
                 safe_rerun()
