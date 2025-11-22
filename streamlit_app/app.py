@@ -104,11 +104,11 @@ if st.session_state.extracted_data:
             st.session_state.extracted_data = None
             safe_rerun()
     else:
-        # Show message if document already exists in DB
-        if already_exists:
-            st.warning("⚠️ document already in db")
-
         fields = result.get("structured_fields", {})
+
+        # Show message if document already exists in DB - display BEFORE form
+        if already_exists:
+            st.warning("⚠️ document already in db", icon="⚠️")
 
         with st.form("review_form"):
             st.subheader("Review Extracted Fields")
@@ -144,49 +144,37 @@ if st.session_state.extracted_data:
                 cancel_btn = st.form_submit_button("Cancel")
 
             if save_btn:
-                # Prevent saving if document already exists in DB
-                if already_exists:
-                    st.error("❌ Cannot save: Document already exists in database")
-                else:
-                    with st.spinner("Saving..."):
-                        clean_fields = {k: (None if v == "" or (isinstance(v, str) and not v.strip()) else v)
-                                      for k, v in reviewed_fields.items()}
+                with st.spinner("Saving..."):
+                    clean_fields = {k: (None if v == "" or (isinstance(v, str) and not v.strip()) else v)
+                                  for k, v in reviewed_fields.items()}
 
-                        save_request = {
-                            "document_hash": st.session_state.document_hash,
-                            "filename": st.session_state.filename or "unknown.pdf",
-                            "structured_fields": clean_fields
-                        }
+                    save_request = {
+                        "document_hash": st.session_state.document_hash,
+                        "filename": st.session_state.filename or "unknown.pdf",
+                        "structured_fields": clean_fields
+                    }
 
-                        try:
-                            response = requests.post(f"{API_BASE_URL}/save", json=save_request, timeout=30)
+                    try:
+                        response = requests.post(f"{API_BASE_URL}/save", json=save_request, timeout=30)
 
-                            # Check response status
-                            if response.status_code == 200:
-                                # Successfully saved
-                                st.session_state.save_success = True
-                            elif response.status_code == 400:
-                                try:
-                                    error_detail = response.json().get("detail", "")
-                                    if "already exists" in error_detail.lower():
-                                        st.error("❌ Document already exists")
-                                    else:
-                                        st.error(f"❌ Error: {error_detail}")
-                                except:
-                                    st.error("❌ Error saving document")
-                            else:
-                                st.error(f"❌ Error: Status code {response.status_code}")
-
+                        # Check response status
+                        if response.status_code == 200:
+                            # Successfully saved
+                            st.session_state.save_success = True
                             st.session_state.extracted_data = None
                             st.session_state.document_hash = None
                             st.session_state.filename = None
                             safe_rerun()
-                        except Exception as e:
-                            st.error(f"❌ Error: {str(e)}")
-                            st.session_state.extracted_data = None
-                            st.session_state.document_hash = None
-                            st.session_state.filename = None
-                            safe_rerun()
+                        elif response.status_code == 400:
+                            try:
+                                error_detail = response.json().get("detail", "")
+                                st.error(f"❌ Error: {error_detail}")
+                            except:
+                                st.error("❌ Error saving document")
+                        else:
+                            st.error(f"❌ Error: Status code {response.status_code}")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
 
             if cancel_btn:
                 st.session_state.extracted_data = None
