@@ -3,6 +3,7 @@
 import streamlit as st
 import requests
 import os
+import pandas as pd
 from dotenv import load_dotenv
 
 # Load .env file (for local development)
@@ -31,6 +32,13 @@ try:
 
     if response.status_code == 200:
         data = response.json()
+
+        # Check if table doesn't exist
+        if "message" in data:
+            st.warning(data["message"])
+            st.info("To create the table, run the SQL file: `infra/model_log.sql`")
+            return
+
         total = data.get("total", 0)
         logs = data.get("logs", [])
 
@@ -50,6 +58,28 @@ try:
                 st.metric("With Corrections", failure_count, delta=f"{failure_count/total*100:.1f}%" if total > 0 else "0%")
 
         if logs:
+            # Display as a table
+            import pandas as pd
+
+            # Prepare data for table display
+            table_data = []
+            for log in logs:
+                corrections_count = len(log.get('corrections_made', {})) if log.get('corrections_made') else 0
+                table_data.append({
+                    "ID": log.get("id"),
+                    "Status": "✅ Success" if log.get("success") else "❌ Corrections",
+                    "Document ID": log.get("document_id") or "N/A",
+                    "Document Hash": log.get("document_hash", "N/A")[:16] + "..." if log.get("document_hash") else "N/A",
+                    "Corrections": corrections_count,
+                    "Created": log.get("created_at", "N/A")[:19] if log.get("created_at") else "N/A"  # Truncate to date/time
+                })
+
+            df = pd.DataFrame(table_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            # Show details in expanders below the table
+            st.markdown("---")
+            st.subheader("Detailed View")
             for log in logs:
                 success_icon = "✅" if log.get("success") else "❌"
                 with st.expander(f"{success_icon} Log ID: {log['id']} - {log.get('document_hash', 'N/A')[:16]}..."):
@@ -73,26 +103,6 @@ try:
                         st.markdown("**Corrections Made:**")
                         for field, change in corrections.items():
                             st.write(f"- **{field}:** `{change.get('original')}` → `{change.get('corrected')}`")
-
-                    # View full details button
-                    if f"show_details_{log['id']}" not in st.session_state:
-                        st.session_state[f"show_details_{log['id']}"] = False
-
-                    if st.button(f"View Full Details", key=f"view_{log['id']}"):
-                        st.session_state[f"show_details_{log['id']}"] = not st.session_state[f"show_details_{log['id']}"]
-
-                    if st.session_state[f"show_details_{log['id']}"]:
-                        try:
-                            detail_response = requests.get(f"{API_BASE_URL}/model-logs/{log['id']}", timeout=10)
-                            if detail_response.status_code == 200:
-                                detail = detail_response.json()
-                                st.markdown("---")
-                                st.subheader(f"Full Details - Log {log['id']}")
-                                st.json(detail)
-                            else:
-                                st.error("Could not fetch details")
-                        except Exception as e:
-                            st.error(f"Error: {str(e)}")
         else:
             st.info("No model logs in database")
 
@@ -100,4 +110,9 @@ try:
         st.error(f"Error: {response.text or 'Unknown error'}")
 
 except Exception as e:
-    st.error(f"Error: {str(e)}")
+    error_str = str(e)
+    if "does not exist" in error_str.lower() or "undefinedtable" in error_str.lower():
+        st.warning("⚠️ Model log table does not exist yet.")
+        st.info("To create the table, run the SQL file: `infra/model_log.sql`")
+    else:
+        st.error(f"Error: {str(e)}")

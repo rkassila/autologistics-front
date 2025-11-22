@@ -37,6 +37,20 @@ def compare_values(original, current):
     return orig_norm != curr_norm
 
 
+def get_modified_fields(original_fields, current_fields):
+    """Get list of field names that have been modified."""
+    modified = []
+    for field_name in original_fields.keys():
+        if compare_values(original_fields.get(field_name), current_fields.get(field_name)):
+            modified.append(field_name)
+    # Also check for new fields in current_fields
+    for field_name in current_fields.keys():
+        if field_name not in original_fields:
+            if current_fields.get(field_name) is not None:
+                modified.append(field_name)
+    return modified
+
+
 st.set_page_config(page_title="Logistics Document Processor", layout="wide", page_icon="📦")
 st.title("📦 Logistics Document Automation")
 
@@ -169,8 +183,17 @@ if st.session_state.extracted_data:
         original_fields = st.session_state.original_fields
         current_fields = st.session_state.current_fields
 
+        # Show modification summary before form (from previous submission)
+        if "current_fields" in st.session_state and st.session_state.current_fields:
+            prev_modified = get_modified_fields(original_fields, st.session_state.current_fields)
+            if prev_modified:
+                st.info(f"📝 **Previous check:** {len(prev_modified)} field(s) modified: {', '.join(prev_modified)}")
+
         with st.form("review_form"):
             st.subheader("Review Extracted Fields")
+
+            # Add a tip for users
+            st.caption("💡 Tip: Make your changes, then click 'Check Modifications' to see what changed, or click 'Save' to save directly")
 
             col1, col2 = st.columns(2)
 
@@ -304,15 +327,39 @@ if st.session_state.extracted_data:
 
             reviewed_fields["special_instructions"] = special_instructions_val
 
-            # Update current_fields immediately so modifications show after form submission
+            # Update current_fields with form values
             st.session_state.current_fields = reviewed_fields.copy()
 
-            col1, col2 = st.columns(2)
+            # Check for modifications
+            modified_fields = get_modified_fields(original_fields, reviewed_fields)
+
+            # Form action buttons
+            col1, col2, col3 = st.columns(3)
             with col1:
-                # Disable save button if document already exists in DB
-                save_btn = st.form_submit_button("Save", disabled=already_exists, use_container_width=True)
+                # Button to check modifications (triggers form submission and shows summary)
+                check_btn = st.form_submit_button("🔍 Check Modifications", disabled=already_exists, use_container_width=True)
             with col2:
-                cancel_btn = st.form_submit_button("Cancel", use_container_width=True)
+                # Disable save button if document already exists in DB
+                save_btn = st.form_submit_button("💾 Save", disabled=already_exists, use_container_width=True)
+            with col3:
+                cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
+
+            # Display modification summary after form submission
+            if check_btn or save_btn:
+                if modified_fields:
+                    st.markdown("---")
+                    st.warning(f"✏️ **{len(modified_fields)} field(s) modified:** {', '.join(modified_fields)}")
+                    # Show details of what changed
+                    with st.expander("View Modification Details"):
+                        for field in modified_fields:
+                            orig_val = original_fields.get(field, "None")
+                            curr_val = reviewed_fields.get(field, "None")
+                            st.write(f"**{field}:**")
+                            st.write(f"  - Original: `{orig_val}`")
+                            st.write(f"  - Current: `{curr_val}`")
+                else:
+                    st.markdown("---")
+                    st.success("✅ No modifications detected - all fields match original extraction")
 
             if save_btn:
                 with st.spinner("Saving..."):
