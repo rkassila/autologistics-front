@@ -9,6 +9,15 @@ load_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api/v1")
 
+
+def safe_rerun():
+    """Safely rerun the app, using st.rerun() if available, falling back to experimental_rerun()."""
+    if hasattr(st, 'rerun'):
+        st.rerun()
+    else:
+        st.experimental_rerun()
+
+
 st.set_page_config(page_title="Logistics Document Processor", layout="wide", page_icon="📦")
 st.title("📦 Logistics Document Automation")
 
@@ -71,7 +80,7 @@ if uploaded_file and st.session_state.extracted_data is None:
                     st.session_state.extracted_data = response_data
                     st.session_state.document_hash = response_data.get("document_hash")
                     st.session_state.filename = uploaded_file.name
-                    st.experimental_rerun()
+                    safe_rerun()
                 else:
                     # Parse error response
                     try:
@@ -96,7 +105,7 @@ if st.session_state.extracted_data:
         st.error(result.get("validation_message", "Not a valid logistics document"))
         if st.button("Try Again"):
             st.session_state.extracted_data = None
-            st.experimental_rerun()
+            safe_rerun()
     else:
         fields = result.get("structured_fields", {})
 
@@ -163,17 +172,17 @@ if st.session_state.extracted_data:
                         st.session_state.extracted_data = None
                         st.session_state.document_hash = None
                         st.session_state.filename = None
-                        st.experimental_rerun()
+                        safe_rerun()
                     except:
                         # Assume success if any error
                         st.session_state.save_success = True
                         st.session_state.extracted_data = None
                         st.session_state.document_hash = None
                         st.session_state.filename = None
-                        st.experimental_rerun()
+                        safe_rerun()
 
             if cancel_btn:
                 st.session_state.extracted_data = None
                 st.session_state.document_hash = None
                 st.session_state.filename = None
-                st.experimental_rerun()
+                safe_rerun()

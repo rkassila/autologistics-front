@@ -10,12 +10,20 @@ from dotenv import load_dotenv
 load_dotenv()
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api/v1")
 
+
+def safe_rerun():
+    """Safely rerun the app, using st.rerun() if available, falling back to experimental_rerun()."""
+    if hasattr(st, 'rerun'):
+        st.rerun()
+    else:
+        st.experimental_rerun()
+
 st.set_page_config(page_title="Database View", layout="wide")
 st.title("Database Content")
 
 # Get documents
 if st.button("Refresh"):
-    st.experimental_rerun()
+    safe_rerun()
 
 try:
     response = requests.get(f"{API_BASE_URL}/documents", timeout=10)
