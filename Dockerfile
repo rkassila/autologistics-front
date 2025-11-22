@@ -24,3 +24,4 @@ EXPOSE 8080
 # Streamlit will use the PORT environment variable set by Cloud Run
 # Cloud Run sets PORT automatically, but we provide a default
 CMD streamlit run streamlit_app/app.py --server.port=${PORT:-8080} --server.address=0.0.0.0 --server.headless=true
+

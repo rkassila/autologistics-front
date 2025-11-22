@@ -89,17 +89,14 @@ if uploaded_file and st.session_state.extracted_data is None:
                     except:
                         error_detail = response.text or "Error"
 
-                    # Check for "already exists" in error message
-                    if "already exists" in error_detail.lower():
-                        st.error("❌ Document already exists in database")
-                    else:
-                        st.error(f"❌ {error_detail}")
+                    st.error(f"❌ {error_detail}")
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
 
 # Review and save
 if st.session_state.extracted_data:
     result = st.session_state.extracted_data
+    already_exists = result.get("already_exists", False)
 
     if not result.get("is_valid"):
         st.error(result.get("validation_message", "Not a valid logistics document"))
@@ -107,6 +104,10 @@ if st.session_state.extracted_data:
             st.session_state.extracted_data = None
             safe_rerun()
     else:
+        # Show message if document already exists in DB
+        if already_exists:
+            st.warning("⚠️ document already in db")
+
         fields = result.get("structured_fields", {})
 
         with st.form("review_form"):
@@ -137,49 +138,55 @@ if st.session_state.extracted_data:
 
             col1, col2 = st.columns(2)
             with col1:
-                save_btn = st.form_submit_button("Save")
+                # Disable save button if document already exists in DB
+                save_btn = st.form_submit_button("Save", disabled=already_exists)
             with col2:
                 cancel_btn = st.form_submit_button("Cancel")
 
             if save_btn:
-                with st.spinner("Saving..."):
-                    clean_fields = {k: (None if v == "" or (isinstance(v, str) and not v.strip()) else v)
-                                  for k, v in reviewed_fields.items()}
+                # Prevent saving if document already exists in DB
+                if already_exists:
+                    st.error("❌ Cannot save: Document already exists in database")
+                else:
+                    with st.spinner("Saving..."):
+                        clean_fields = {k: (None if v == "" or (isinstance(v, str) and not v.strip()) else v)
+                                      for k, v in reviewed_fields.items()}
 
-                    save_request = {
-                        "document_hash": st.session_state.document_hash,
-                        "filename": st.session_state.filename or "unknown.pdf",
-                        "structured_fields": clean_fields
-                    }
+                        save_request = {
+                            "document_hash": st.session_state.document_hash,
+                            "filename": st.session_state.filename or "unknown.pdf",
+                            "structured_fields": clean_fields
+                        }
 
-                    try:
-                        response = requests.post(f"{API_BASE_URL}/save", json=save_request, timeout=30)
+                        try:
+                            response = requests.post(f"{API_BASE_URL}/save", json=save_request, timeout=30)
 
-                        # Check if it's "document already exists" error
-                        if response.status_code == 400:
-                            try:
-                                error_detail = response.json().get("detail", "")
-                                if "already exists" in error_detail.lower():
-                                    st.error("Document already exists")
-                                else:
-                                    st.session_state.save_success = True
-                            except:
+                            # Check response status
+                            if response.status_code == 200:
+                                # Successfully saved
                                 st.session_state.save_success = True
-                        else:
-                            # Any other response ok for now
-                            st.session_state.save_success = True
+                            elif response.status_code == 400:
+                                try:
+                                    error_detail = response.json().get("detail", "")
+                                    if "already exists" in error_detail.lower():
+                                        st.error("❌ Document already exists")
+                                    else:
+                                        st.error(f"❌ Error: {error_detail}")
+                                except:
+                                    st.error("❌ Error saving document")
+                            else:
+                                st.error(f"❌ Error: Status code {response.status_code}")
 
-                        st.session_state.extracted_data = None
-                        st.session_state.document_hash = None
-                        st.session_state.filename = None
-                        safe_rerun()
-                    except:
-                        # Assume success if any error
-                        st.session_state.save_success = True
-                        st.session_state.extracted_data = None
-                        st.session_state.document_hash = None
-                        st.session_state.filename = None
-                        safe_rerun()
+                            st.session_state.extracted_data = None
+                            st.session_state.document_hash = None
+                            st.session_state.filename = None
+                            safe_rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+                            st.session_state.extracted_data = None
+                            st.session_state.document_hash = None
+                            st.session_state.filename = None
+                            safe_rerun()
 
             if cancel_btn:
                 st.session_state.extracted_data = None
