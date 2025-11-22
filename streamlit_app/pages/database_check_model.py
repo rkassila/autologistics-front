@@ -37,7 +37,7 @@ try:
         if "message" in data:
             st.warning(data["message"])
             st.info("To create the table, run the SQL file: `infra/model_log.sql`")
-            return
+            st.stop()
 
         total = data.get("total", 0)
         logs = data.get("logs", [])
