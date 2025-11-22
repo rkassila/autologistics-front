@@ -1,118 +1,80 @@
 """Streamlit page for viewing model log database content."""
 
 import streamlit as st
-import requests
 import os
 import pandas as pd
+import psycopg2
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 
-# Load .env file (for local development)
-# For Cloud Run, set API_BASE_URL as an environment variable
 load_dotenv()
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api/v1")
-
-
-def safe_rerun():
-    """Safely rerun the app, using st.rerun() if available, falling back to experimental_rerun()."""
-    if hasattr(st, 'rerun'):
-        st.rerun()
-    else:
-        st.experimental_rerun()
-
 
 st.set_page_config(page_title="Model Log View", layout="wide")
 st.title("Model Log Database Content")
 
-# Get model logs
+# Database connection settings
+db_host = os.getenv("DB_HOST", "localhost")
+db_port = os.getenv("DB_PORT", "5432")
+db_user = os.getenv("DB_USER", "postgres")
+db_password = os.getenv("DB_PASSWORD", "")
+db_name = os.getenv("DB_NAME", "logistics_db")
+table_name = os.getenv("DB_MODEL_NAME", "model_log")
+
+# Get model logs directly from database
 if st.button("Refresh"):
-    safe_rerun()
+    st.rerun()
 
 try:
-    response = requests.get(f"{API_BASE_URL}/model-logs", timeout=10)
-
-    if response.status_code == 200:
-        data = response.json()
-
-        # Check if table doesn't exist
-        if "message" in data:
-            st.warning(data["message"])
-            st.info("To create the table, run the SQL file: `infra/model_log.sql`")
-            st.stop()
-
-        total = data.get("total", 0)
-        logs = data.get("logs", [])
-
-        st.info(f"Total model logs: {total}")
-
-        # Summary statistics
-        if logs:
-            success_count = sum(1 for log in logs if log.get("success"))
-            failure_count = total - success_count
-
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Logs", total)
-            with col2:
-                st.metric("Successful", success_count, delta=f"{success_count/total*100:.1f}%" if total > 0 else "0%")
-            with col3:
-                st.metric("With Corrections", failure_count, delta=f"{failure_count/total*100:.1f}%" if total > 0 else "0%")
-
-        if logs:
-            # Display as a table
-            import pandas as pd
-
-            # Prepare data for table display
-            table_data = []
-            for log in logs:
-                corrections_count = len(log.get('corrections_made', {})) if log.get('corrections_made') else 0
-                table_data.append({
-                    "ID": log.get("id"),
-                    "Status": "✅ Success" if log.get("success") else "❌ Corrections",
-                    "Document ID": log.get("document_id") or "N/A",
-                    "Document Hash": log.get("document_hash", "N/A")[:16] + "..." if log.get("document_hash") else "N/A",
-                    "Corrections": corrections_count,
-                    "Created": log.get("created_at", "N/A")[:19] if log.get("created_at") else "N/A"  # Truncate to date/time
-                })
-
-            df = pd.DataFrame(table_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-
-            # Show details in expanders below the table
-            st.markdown("---")
-            st.subheader("Detailed View")
-            for log in logs:
-                success_icon = "✅" if log.get("success") else "❌"
-                with st.expander(f"{success_icon} Log ID: {log['id']} - {log.get('document_hash', 'N/A')[:16]}..."):
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.write(f"**Success:** {'Yes' if log.get('success') else 'No'}")
-                        st.write(f"**Document ID:** {log.get('document_id') or 'N/A'}")
-                        st.write(f"**Document Hash:** {log.get('document_hash') or 'N/A'}")
-                        if log.get('document_link'):
-                            st.write(f"**Document Link:** {log['document_link']}")
-
-                    with col2:
-                        st.write(f"**Created:** {log.get('created_at', 'N/A')}")
-                        if log.get('failure_reason'):
-                            st.write(f"**Failure Reason:** {log['failure_reason']}")
-
-                    # Show corrections if any
-                    corrections = log.get('corrections_made', {})
-                    if corrections:
-                        st.markdown("**Corrections Made:**")
-                        for field, change in corrections.items():
-                            st.write(f"- **{field}:** `{change.get('original')}` → `{change.get('corrected')}`")
-        else:
-            st.info("No model logs in database")
-
+    # Create database connection
+    if os.getenv("INSTANCE_CONNECTION_NAME"):
+        # Cloud SQL Unix socket connection
+        db_url = f"postgresql+psycopg2://{db_user}:{db_password}@/{db_name}?host=/cloudsql/{os.getenv('INSTANCE_CONNECTION_NAME')}"
     else:
-        st.error(f"Error: {response.text or 'Unknown error'}")
+        # Regular TCP connection
+        db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+    engine = create_engine(db_url, pool_pre_ping=True)
+
+    # Simple SELECT query
+    with engine.connect() as conn:
+        try:
+            query = text(f"SELECT * FROM {table_name} ORDER BY created_at DESC LIMIT 100")
+            result = conn.execute(query)
+            rows = result.fetchall()
+            columns = result.keys()
+
+            if rows:
+                # Convert to DataFrame
+                df = pd.DataFrame(rows, columns=columns)
+
+                # Display summary
+                st.info(f"Total model logs: {len(df)}")
+
+                # Summary statistics
+                if 'success' in df.columns:
+                    success_count = df['success'].sum()
+                    failure_count = len(df) - success_count
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Logs", len(df))
+                    with col2:
+                        st.metric("Successful", success_count, delta=f"{success_count/len(df)*100:.1f}%" if len(df) > 0 else "0%")
+                    with col3:
+                        st.metric("With Corrections", failure_count, delta=f"{failure_count/len(df)*100:.1f}%" if len(df) > 0 else "0%")
+
+                # Display table
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No model logs in database")
+
+        except Exception as e:
+            error_str = str(e)
+            if "does not exist" in error_str.lower() or "undefinedtable" in error_str.lower():
+                st.warning(f"⚠️ Table '{table_name}' does not exist yet.")
+                st.info(f"To create the table, run the SQL file: `infra/model_log.sql`")
+            else:
+                st.error(f"Database error: {str(e)}")
 
 except Exception as e:
-    error_str = str(e)
-    if "does not exist" in error_str.lower() or "undefinedtable" in error_str.lower():
-        st.warning("⚠️ Model log table does not exist yet.")
-        st.info("To create the table, run the SQL file: `infra/model_log.sql`")
-    else:
-        st.error(f"Error: {str(e)}")
+    st.error(f"Connection error: {str(e)}")

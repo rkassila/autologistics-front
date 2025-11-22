@@ -40,14 +40,13 @@ def compare_values(original, current):
 def get_modified_fields(original_fields, current_fields):
     """Get list of field names that have been modified."""
     modified = []
-    for field_name in original_fields.keys():
-        if compare_values(original_fields.get(field_name), current_fields.get(field_name)):
-            modified.append(field_name)
-    # Also check for new fields in current_fields
+    # Only compare fields that are actually in the form (current_fields)
+    # Don't check fields that exist in original but aren't editable in the form
     for field_name in current_fields.keys():
-        if field_name not in original_fields:
-            if current_fields.get(field_name) is not None:
-                modified.append(field_name)
+        original_value = original_fields.get(field_name)
+        current_value = current_fields.get(field_name)
+        if compare_values(original_value, current_value):
+            modified.append(field_name)
     return modified
 
 
