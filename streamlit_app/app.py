@@ -171,7 +171,25 @@ if st.session_state.extracted_data:
                                 st.error(f"❌ Error: {error_detail}")
                             except:
                                 st.error("❌ Error saving document")
-                        # Other status codes (like 500) are handled silently
+                        else:
+                            # For 500 or other errors - might still be saved, so check error message
+                            try:
+                                error_detail = response.json().get("detail", "")
+                                print(f"Backend error (status {response.status_code}): {error_detail}")
+                                # If error mentions save succeeded or document exists, treat as success
+                                if "saved" in error_detail.lower() or "already exists" in error_detail.lower():
+                                    st.session_state.extracted_data = None
+                                    st.session_state.document_hash = None
+                                    st.session_state.filename = None
+                                    st.session_state.save_success = True
+                                    safe_rerun()
+                                else:
+                                    # Unknown error - show warning but don't block
+                                    st.warning(f"⚠️ Warning: {error_detail} - Please check if document was saved")
+                            except:
+                                # Can't parse error - assume it might have worked
+                                print(f"Unknown error with status {response.status_code}")
+                                st.warning("⚠️ Warning: Unknown error - Please check if document was saved")
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
 
