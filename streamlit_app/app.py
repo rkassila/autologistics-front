@@ -18,47 +18,6 @@ def safe_rerun():
         st.experimental_rerun()
 
 
-def normalize_value(value):
-    """Normalize a value for comparison (handle None, empty strings, dates)."""
-    if value is None:
-        return None
-    # Handle date objects - convert to string for comparison
-    if hasattr(value, 'isoformat'):  # date or datetime objects
-        return value.isoformat()
-    if isinstance(value, str):
-        return value.strip() if value.strip() else None
-    return str(value) if value else None
-
-
-def compare_values(original, current):
-    """Compare two values and return True if they're different."""
-    orig_norm = normalize_value(original)
-    curr_norm = normalize_value(current)
-    return orig_norm != curr_norm
-
-
-def get_corrections_made(original_fields, reviewed_fields):
-    """Compare original and reviewed fields, return dict of corrections made."""
-    corrections = {}
-    # Check all fields in original_fields
-    for field_name, original_value in original_fields.items():
-        current_value = reviewed_fields.get(field_name)
-        if compare_values(original_value, current_value):
-            corrections[field_name] = {
-                "original": original_value,
-                "corrected": current_value
-            }
-    # Also check for new fields in reviewed_fields that weren't in original
-    for field_name, current_value in reviewed_fields.items():
-        if field_name not in original_fields and current_value is not None:
-            # New field was added
-            corrections[field_name] = {
-                "original": None,
-                "corrected": current_value
-            }
-    return corrections
-
-
 st.set_page_config(page_title="Logistics Document Processor", layout="wide", page_icon="📦")
 st.title("📦 Logistics Document Automation")
 
@@ -67,6 +26,10 @@ if "api_status" not in st.session_state:
     st.session_state.api_status = None
 if "db_status" not in st.session_state:
     st.session_state.db_status = None
+if "bucket_status" not in st.session_state:
+    st.session_state.bucket_status = None
+if "model_log_db_status" not in st.session_state:
+    st.session_state.model_log_db_status = None
 
 # Check API health on load
 try:
@@ -75,23 +38,44 @@ try:
         health_data = health_response.json()
         st.session_state.api_status = "connected"
         st.session_state.db_status = health_data.get("database", "unknown")
+        st.session_state.bucket_status = health_data.get("bucket", "unknown")
+        st.session_state.model_log_db_status = health_data.get("model_log_db", "unknown")
     else:
         st.session_state.api_status = "error"
 except:
     st.session_state.api_status = "disconnected"
 
-# Display status
+# Display status - 4 checks in 2x2 grid
 col1, col2 = st.columns(2)
 with col1:
     if st.session_state.api_status == "connected":
         st.success("✅ API Connected")
     else:
         st.error("❌ API Disconnected")
-with col2:
+
     if st.session_state.db_status == "connected":
         st.success("✅ Database Connected")
-    else:
+    elif st.session_state.db_status == "disconnected":
         st.warning("⚠️ Database Disconnected")
+    else:
+        st.info("ℹ️ Database Status Unknown")
+
+with col2:
+    if st.session_state.bucket_status == "connected":
+        st.success("✅ Bucket Connected")
+    elif st.session_state.bucket_status == "not_configured":
+        st.info("ℹ️ Bucket Not Configured")
+    elif st.session_state.bucket_status == "disconnected":
+        st.warning("⚠️ Bucket Disconnected")
+    else:
+        st.info("ℹ️ Bucket Status Unknown")
+
+    if st.session_state.model_log_db_status == "connected":
+        st.success("✅ Model Log DB Connected")
+    elif st.session_state.model_log_db_status == "disconnected":
+        st.warning("⚠️ Model Log DB Disconnected")
+    else:
+        st.info("ℹ️ Model Log DB Status Unknown")
 
 if "extracted_data" not in st.session_state:
     st.session_state.extracted_data = None
@@ -121,9 +105,6 @@ if uploaded_file and st.session_state.extracted_data is None:
                     st.session_state.extracted_data = response_data
                     st.session_state.document_hash = response_data.get("document_hash")
                     st.session_state.filename = uploaded_file.name
-                    # Store original values for comparison
-                    original_fields = response_data.get("structured_fields", {})
-                    st.session_state.original_fields = original_fields.copy()
                     safe_rerun()
                 else:
                     # Parse error response
@@ -150,10 +131,6 @@ if st.session_state.extracted_data:
     else:
         fields = result.get("structured_fields", {})
 
-        # Initialize original_fields if not set (for backward compatibility)
-        if "original_fields" not in st.session_state:
-            st.session_state.original_fields = fields.copy()
-
         # Show message if document already exists in DB - display BEFORE form
         if already_exists:
             st.warning("⚠️ document already in db", icon="⚠️")
@@ -161,86 +138,28 @@ if st.session_state.extracted_data:
         with st.form("review_form"):
             st.subheader("Review Extracted Fields")
 
-            # Track modifications in real-time by comparing with original
-            original_fields = st.session_state.original_fields
-
             col1, col2 = st.columns(2)
 
             with col1:
-                # Create inputs and check for modifications
-                shipper_name_val = st.text_input("Shipper Name", value=fields.get("shipper_name") or "", key="shipper_name_input")
-                if compare_values(original_fields.get("shipper_name"), shipper_name_val):
-                    st.caption("✏️ Modified")
-
-                shipper_address_val = st.text_area("Shipper Address", value=fields.get("shipper_address") or "", key="shipper_address_input")
-                if compare_values(original_fields.get("shipper_address"), shipper_address_val):
-                    st.caption("✏️ Modified")
-
-                receiver_name_val = st.text_input("Receiver Name", value=fields.get("receiver_name") or "", key="receiver_name_input")
-                if compare_values(original_fields.get("receiver_name"), receiver_name_val):
-                    st.caption("✏️ Modified")
-
-                receiver_address_val = st.text_area("Receiver Address", value=fields.get("receiver_address") or "", key="receiver_address_input")
-                if compare_values(original_fields.get("receiver_address"), receiver_address_val):
-                    st.caption("✏️ Modified")
-
                 reviewed_fields = {
-                    "shipper_name": shipper_name_val,
-                    "shipper_address": shipper_address_val,
-                    "receiver_name": receiver_name_val,
-                    "receiver_address": receiver_address_val,
+                    "shipper_name": st.text_input("Shipper Name", value=fields.get("shipper_name") or "", disabled=already_exists),
+                    "shipper_address": st.text_area("Shipper Address", value=fields.get("shipper_address") or "", disabled=already_exists),
+                    "receiver_name": st.text_input("Receiver Name", value=fields.get("receiver_name") or "", disabled=already_exists),
+                    "receiver_address": st.text_area("Receiver Address", value=fields.get("receiver_address") or "", disabled=already_exists),
                 }
 
             with col2:
-                tracking_number_val = st.text_input("Tracking Number", value=fields.get("tracking_number") or "", key="tracking_number_input")
-                if compare_values(original_fields.get("tracking_number"), tracking_number_val):
-                    st.caption("✏️ Modified")
-
-                carrier_val = st.text_input("Carrier", value=fields.get("carrier") or "", key="carrier_input")
-                if compare_values(original_fields.get("carrier"), carrier_val):
-                    st.caption("✏️ Modified")
-
-                weight_val = st.text_input("Weight", value=fields.get("weight") or "", key="weight_input")
-                if compare_values(original_fields.get("weight"), weight_val):
-                    st.caption("✏️ Modified")
-
-                dimensions_val = st.text_input("Dimensions", value=fields.get("dimensions") or "", key="dimensions_input")
-                if compare_values(original_fields.get("dimensions"), dimensions_val):
-                    st.caption("✏️ Modified")
-
-                status_val = st.text_input("Status", value=fields.get("status") or "", key="status_input")
-                if compare_values(original_fields.get("status"), status_val):
-                    st.caption("✏️ Modified")
-
-                shipment_date_val = st.text_input("Shipment Date", value=str(fields.get("shipment_date")) if fields.get("shipment_date") else "", key="shipment_date_input")
-                if compare_values(original_fields.get("shipment_date"), shipment_date_val):
-                    st.caption("✏️ Modified")
-
-                delivery_date_val = st.text_input("Delivery Date", value=str(fields.get("delivery_date")) if fields.get("delivery_date") else "", key="delivery_date_input")
-                if compare_values(original_fields.get("delivery_date"), delivery_date_val):
-                    st.caption("✏️ Modified")
-
                 reviewed_fields.update({
-                    "tracking_number": tracking_number_val,
-                    "carrier": carrier_val,
-                    "weight": weight_val,
-                    "dimensions": dimensions_val,
-                    "status": status_val,
-                    "shipment_date": shipment_date_val,
-                    "delivery_date": delivery_date_val,
+                    "tracking_number": st.text_input("Tracking Number", value=fields.get("tracking_number") or "", disabled=already_exists),
+                    "carrier": st.text_input("Carrier", value=fields.get("carrier") or "", disabled=already_exists),
+                    "weight": st.text_input("Weight", value=fields.get("weight") or "", disabled=already_exists),
+                    "dimensions": st.text_input("Dimensions", value=fields.get("dimensions") or "", disabled=already_exists),
+                    "status": st.text_input("Status", value=fields.get("status") or "", disabled=already_exists),
+                    "shipment_date": st.text_input("Shipment Date", value=str(fields.get("shipment_date")) if fields.get("shipment_date") else "", disabled=already_exists),
+                    "delivery_date": st.text_input("Delivery Date", value=str(fields.get("delivery_date")) if fields.get("delivery_date") else "", disabled=already_exists),
                 })
 
-            special_instructions_val = st.text_area("Special Instructions", value=fields.get("special_instructions") or "", key="special_instructions_input")
-            if compare_values(original_fields.get("special_instructions"), special_instructions_val):
-                st.caption("✏️ Modified")
-
-            reviewed_fields["special_instructions"] = special_instructions_val
-
-            # Check for modifications and show summary (using original_fields already defined above)
-            modifications = get_corrections_made(original_fields, reviewed_fields)
-
-            if modifications:
-                st.info(f"⚠️ **{len(modifications)} field(s) modified:** {', '.join(modifications.keys())}")
+            reviewed_fields["special_instructions"] = st.text_area("Special Instructions", value=fields.get("special_instructions") or "", disabled=already_exists)
 
             col1, col2 = st.columns(2)
             with col1:
@@ -254,11 +173,6 @@ if st.session_state.extracted_data:
                     clean_fields = {k: (None if v == "" or (isinstance(v, str) and not v.strip()) else v)
                                   for k, v in reviewed_fields.items()}
 
-                    # Compare original vs reviewed to determine if corrections were made
-                    original_fields = st.session_state.original_fields
-                    corrections_made = get_corrections_made(original_fields, clean_fields)
-                    has_modifications = len(corrections_made) > 0
-
                     save_request = {
                         "document_hash": st.session_state.document_hash,
                         "filename": st.session_state.filename or "unknown.pdf",
@@ -270,40 +184,10 @@ if st.session_state.extracted_data:
 
                         # Check response status
                         if response.status_code == 200:
-                            response_data = response.json()
-                            document_id = response_data.get("document_id")
-                            storage_url = response_data.get("storage_url") or result.get("storage_url")
-
-                            # Log extraction quality
-                            quality_log_data = {
-                                "success": not has_modifications,
-                                "document_id": document_id,
-                                "document_hash": st.session_state.document_hash,
-                                "document_link": storage_url,
-                                "extraction_result": result,
-                                "original_values": original_fields,
-                                "corrected_values": clean_fields,
-                                "corrections_made": corrections_made if has_modifications else {},
-                                "failure_reason": f"Manual corrections made to {len(corrections_made)} field(s): {', '.join(corrections_made.keys())}" if has_modifications else None
-                            }
-
-                            # Send model log to backend
-                            try:
-                                log_response = requests.post(
-                                    f"{API_BASE_URL}/model-log",
-                                    json=quality_log_data,
-                                    timeout=10
-                                )
-                                if log_response.status_code != 200:
-                                    print(f"Warning: Failed to log model quality: {log_response.text}")
-                            except Exception as e:
-                                print(f"Warning: Error logging model quality: {str(e)}")
-
                             # Successfully saved - clear all displayed values
                             st.session_state.extracted_data = None
                             st.session_state.document_hash = None
                             st.session_state.filename = None
-                            st.session_state.original_fields = None
                             st.session_state.save_success = True
                             safe_rerun()
                         elif response.status_code == 400:
@@ -322,7 +206,6 @@ if st.session_state.extracted_data:
                                     st.session_state.extracted_data = None
                                     st.session_state.document_hash = None
                                     st.session_state.filename = None
-                                    st.session_state.original_fields = None
                                     st.session_state.save_success = True
                                     safe_rerun()
                                 else:
@@ -339,5 +222,4 @@ if st.session_state.extracted_data:
                 st.session_state.extracted_data = None
                 st.session_state.document_hash = None
                 st.session_state.filename = None
-                st.session_state.original_fields = None
                 safe_rerun()
