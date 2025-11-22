@@ -61,7 +61,7 @@ if "filename" not in st.session_state:
 
 # Show save success message if it exists
 if st.session_state.get("save_success", False):
-    st.success("✅ Document saved successfully!")
+    st.success("✅ Document saved")
     st.session_state.save_success = False  # Clear after showing
 
 uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
@@ -159,11 +159,11 @@ if st.session_state.extracted_data:
 
                         # Check response status
                         if response.status_code == 200:
-                            # Successfully saved
-                            st.session_state.save_success = True
+                            # Successfully saved - clear all displayed values
                             st.session_state.extracted_data = None
                             st.session_state.document_hash = None
                             st.session_state.filename = None
+                            st.session_state.save_success = True
                             safe_rerun()
                         elif response.status_code == 400:
                             try:
