@@ -171,8 +171,7 @@ if st.session_state.extracted_data:
                                 st.error(f"❌ Error: {error_detail}")
                             except:
                                 st.error("❌ Error saving document")
-                        else:
-                            st.error(f"❌ Error: Status code {response.status_code}")
+                        # Other status codes (like 500) are handled silently
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
 
