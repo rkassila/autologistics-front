@@ -5,8 +5,6 @@ import requests
 import os
 from dotenv import load_dotenv
 
-# Load .env file (for local development)
-# For Cloud Run, set API_BASE_URL as an environment variable
 load_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api/v1")
