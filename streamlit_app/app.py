@@ -327,7 +327,7 @@ if st.session_state.extracted_data:
             modified_fields = get_modified_fields(original_fields, reviewed_fields)
 
             # Form action buttons
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 # Button to check modifications (triggers form submission and shows summary)
                 check_btn = st.form_submit_button("🔍 Check Modifications", disabled=already_exists, use_container_width=True)
@@ -335,6 +335,9 @@ if st.session_state.extracted_data:
                 # Disable save button if document already exists in DB
                 save_btn = st.form_submit_button("💾 Save", disabled=already_exists, use_container_width=True)
             with col3:
+                # Button to save to model_log database
+                save_model_log_btn = st.form_submit_button("📊 Save to Model Log", disabled=already_exists, use_container_width=True)
+            with col4:
                 cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
 
             # Display modification summary after form submission
@@ -403,6 +406,24 @@ if st.session_state.extracted_data:
                                 # Can't parse error - assume it might have worked
                                 print(f"Unknown error with status {response.status_code}")
                                 st.warning("⚠️ Warning: Unknown error - Please check if document was saved")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+
+            if save_model_log_btn:
+                with st.spinner("Saving to model log..."):
+                    try:
+                        # Call the test endpoint that saves to model_log
+                        response = requests.post(f"{API_BASE_URL}/test-model-log-save", timeout=30)
+
+                        if response.status_code == 200:
+                            result = response.json()
+                            st.success(f"✅ Saved to model log! Log ID: {result.get('log_id')}")
+                        else:
+                            try:
+                                error_detail = response.json().get("detail", "Unknown error")
+                                st.error(f"❌ Error: {error_detail}")
+                            except:
+                                st.error(f"❌ Error: {response.text or 'Unknown error'}")
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
 
