@@ -72,15 +72,20 @@ try:
                     df['is_success'] = df['success'].astype(int)
                     df['is_correction'] = (~df['success']).astype(int)
 
-                    # Group by minute
+                    # Group by minute - calculate rates per minute (not cumulative)
                     time_series = df.groupby('minute').agg({
                         'is_success': 'sum',
                         'is_correction': 'sum',
                         'id': 'count'
                     }).reset_index()
                     time_series.columns = ['minute', 'successful', 'with_corrections', 'total']
+
+                    # Calculate rates for each minute independently
                     time_series['success_rate'] = (time_series['successful'] / time_series['total'] * 100).round(2)
                     time_series['correction_rate'] = (time_series['with_corrections'] / time_series['total'] * 100).round(2)
+
+                    # Sort by minute to ensure proper time ordering
+                    time_series = time_series.sort_values('minute')
 
                     # Create two columns for graphs
                     col1, col2 = st.columns(2)
