@@ -166,7 +166,6 @@ try:
                         col1, col2 = st.columns(2)
 
                         with col1:
-                            st.write(f"**Document ID:** {log.get('document_id') or 'N/A'}")
                             st.write(f"**Document Hash:** {log.get('document_hash') or 'N/A'}")
                             st.write(f"**Success:** {success}")
                             if log.get('document_link'):
