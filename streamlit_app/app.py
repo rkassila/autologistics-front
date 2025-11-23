@@ -327,24 +327,22 @@ if st.session_state.extracted_data:
             modified_fields = get_modified_fields(original_fields, reviewed_fields)
 
             # Form action buttons
-            col1, col2, col3, col4, col5 = st.columns(5)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 # Button to check modifications (triggers form submission and shows summary)
                 check_btn = st.form_submit_button("🔍 Check Modifications", disabled=already_exists, use_container_width=True)
             with col2:
-                # Disable save button if document already exists in DB
-                save_btn = st.form_submit_button("💾 Save", disabled=already_exists, use_container_width=True)
-            with col3:
-                # Button to save to model_log database
-                save_model_log_btn = st.form_submit_button("📊 Save to Model Log", disabled=already_exists, use_container_width=True)
-            with col4:
                 # Button that saves model log first, then saves document
                 save_both_btn = st.form_submit_button("💾📊 Save All", disabled=already_exists, use_container_width=True)
-            with col5:
+            with col3:
                 cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
 
+            # Hidden buttons - code kept but not displayed
+            # save_btn = st.form_submit_button("💾 Save", disabled=True, use_container_width=True, key="hidden_save")
+            # save_model_log_btn = st.form_submit_button("📊 Save to Model Log", disabled=True, use_container_width=True, key="hidden_model_log")
+
             # Display modification summary after form submission
-            if check_btn or save_btn:
+            if check_btn or save_both_btn:
                 if modified_fields:
                     st.markdown("---")
                     st.warning(f"✏️ **{len(modified_fields)} field(s) modified:** {', '.join(modified_fields)}")
