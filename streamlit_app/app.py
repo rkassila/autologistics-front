@@ -412,8 +412,18 @@ if st.session_state.extracted_data:
             if save_model_log_btn:
                 with st.spinner("Saving to model log..."):
                     try:
-                        # Call the test endpoint that saves to model_log
-                        response = requests.post(f"{API_BASE_URL}/test-model-log-save", timeout=30)
+                        # Prepare request with real document data
+                        result = st.session_state.extracted_data
+                        save_model_log_request = {
+                            "document_hash": st.session_state.document_hash,
+                            "original_fields": original_fields,
+                            "reviewed_fields": reviewed_fields,
+                            "additional_data": result.get("additional_data", {}),
+                            "storage_url": result.get("storage_url")
+                        }
+
+                        # Call the endpoint that saves to model_log
+                        response = requests.post(f"{API_BASE_URL}/test-model-log-save", json=save_model_log_request, timeout=30)
 
                         if response.status_code == 200:
                             result = response.json()
