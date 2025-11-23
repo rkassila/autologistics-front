@@ -327,7 +327,7 @@ if st.session_state.extracted_data:
             modified_fields = get_modified_fields(original_fields, reviewed_fields)
 
             # Form action buttons
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
                 # Button to check modifications (triggers form submission and shows summary)
                 check_btn = st.form_submit_button("🔍 Check Modifications", disabled=already_exists, use_container_width=True)
@@ -338,6 +338,9 @@ if st.session_state.extracted_data:
                 # Button to save to model_log database
                 save_model_log_btn = st.form_submit_button("📊 Save to Model Log", disabled=already_exists, use_container_width=True)
             with col4:
+                # Button that saves model log first, then saves document
+                save_both_btn = st.form_submit_button("💾📊 Save All", disabled=already_exists, use_container_width=True)
+            with col5:
                 cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
 
             # Display modification summary after form submission
@@ -434,6 +437,79 @@ if st.session_state.extracted_data:
                                 st.error(f"❌ Error: {error_detail}")
                             except:
                                 st.error(f"❌ Error: {response.text or 'Unknown error'}")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+
+            if save_both_btn:
+                with st.spinner("Saving model log and document..."):
+                    try:
+                        # Step 1: Save to model_log first
+                        result = st.session_state.extracted_data
+                        save_model_log_request = {
+                            "document_hash": st.session_state.document_hash,
+                            "original_fields": original_fields,
+                            "reviewed_fields": reviewed_fields,
+                            "additional_data": result.get("additional_data", {}),
+                            "storage_url": result.get("storage_url")
+                        }
+
+                        model_log_response = requests.post(f"{API_BASE_URL}/test-model-log-save", json=save_model_log_request, timeout=30)
+
+                        if model_log_response.status_code != 200:
+                            try:
+                                error_detail = model_log_response.json().get("detail", "Unknown error")
+                                st.error(f"❌ Error saving model log: {error_detail}")
+                            except:
+                                st.error(f"❌ Error saving model log: {model_log_response.text or 'Unknown error'}")
+                            # Don't continue to document save if model log failed
+                        else:
+                            # Step 2: Save document
+                            clean_fields = {k: (None if v == "" or (isinstance(v, str) and not v.strip()) else v)
+                                          for k, v in reviewed_fields.items()}
+
+                            save_request = {
+                                "document_hash": st.session_state.document_hash,
+                                "filename": st.session_state.filename or "unknown.pdf",
+                                "structured_fields": clean_fields
+                            }
+
+                            doc_response = requests.post(f"{API_BASE_URL}/save", json=save_request, timeout=30)
+
+                            # Check response status
+                            if doc_response.status_code == 200:
+                                # Successfully saved both - clear all displayed values
+                                st.session_state.extracted_data = None
+                                st.session_state.document_hash = None
+                                st.session_state.filename = None
+                                st.session_state.original_fields = None
+                                st.session_state.current_fields = None
+                                st.session_state.save_success = True
+                                safe_rerun()
+                            elif doc_response.status_code == 400:
+                                try:
+                                    error_detail = doc_response.json().get("detail", "")
+                                    st.error(f"❌ Error saving document: {error_detail}")
+                                except:
+                                    st.error("❌ Error saving document")
+                            else:
+                                # For 500 or other errors - might still be saved, so check error message
+                                try:
+                                    error_detail = doc_response.json().get("detail", "")
+                                    print(f"Backend error (status {doc_response.status_code}): {error_detail}")
+                                    # If error mentions save succeeded or document exists, treat as success
+                                    if "saved" in error_detail.lower() or "already exists" in error_detail.lower():
+                                        st.session_state.extracted_data = None
+                                        st.session_state.document_hash = None
+                                        st.session_state.filename = None
+                                        st.session_state.save_success = True
+                                        safe_rerun()
+                                    else:
+                                        # Unknown error - show warning but don't block
+                                        st.warning(f"⚠️ Warning: {error_detail} - Please check if document was saved")
+                                except:
+                                    # Can't parse error - assume it might have worked
+                                    print(f"Unknown error with status {doc_response.status_code}")
+                                    st.warning("⚠️ Warning: Unknown error - Please check if document was saved")
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
 
