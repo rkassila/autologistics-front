@@ -82,7 +82,11 @@ with st.form("test_model_log_form"):
     if corrections_made:
         st.json({"corrections_made": corrections_made})
 
-    submit_button = st.form_submit_button("📝 Create Test Model Log Entry", use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        submit_button = st.form_submit_button("📝 Create Test Model Log Entry", use_container_width=True)
+    with col2:
+        test_save_button = st.form_submit_button("🧪 Test Save Endpoint Logic", use_container_width=True)
 
     if submit_button:
         with st.spinner("Creating test model log entry..."):
@@ -110,6 +114,31 @@ with st.form("test_model_log_form"):
                 if response.status_code == 200:
                     result = response.json()
                     st.success(f"✅ Model log created successfully!")
+                    st.json(result)
+                    st.balloons()
+                else:
+                    try:
+                        error_data = response.json()
+                        error_detail = error_data.get("detail", "Unknown error")
+                        st.error(f"❌ Error: {error_detail}")
+                    except:
+                        st.error(f"❌ Error: {response.text or 'Unknown error'}")
+
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
+
+    if test_save_button:
+        with st.spinner("Testing save endpoint logic (direct DB write)..."):
+            try:
+                # Call the new test endpoint that uses the same code as save endpoint
+                response = requests.post(
+                    f"{API_BASE_URL}/test-model-log-save",
+                    timeout=10
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    st.success(f"✅ Test save endpoint worked! Model log created successfully!")
                     st.json(result)
                     st.balloons()
                 else:
