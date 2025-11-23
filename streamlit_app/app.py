@@ -337,9 +337,9 @@ if st.session_state.extracted_data:
             with col3:
                 cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
 
-            # Hidden buttons - code kept but not displayed
-            # save_btn = st.form_submit_button("💾 Save", disabled=True, use_container_width=True, key="hidden_save")
-            # save_model_log_btn = st.form_submit_button("📊 Save to Model Log", disabled=True, use_container_width=True, key="hidden_model_log")
+            # Hidden buttons - code kept but not displayed (set to False so handlers don't execute)
+            save_btn = False
+            save_model_log_btn = False
 
             # Display modification summary after form submission
             if check_btn or save_both_btn:
