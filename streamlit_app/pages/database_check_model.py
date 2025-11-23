@@ -5,6 +5,9 @@ import requests
 import os
 import pandas as pd
 from dotenv import load_dotenv
+from datetime import datetime
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Load .env file (for local development)
 # For Cloud Run, set API_BASE_URL as an environment variable
@@ -58,6 +61,94 @@ try:
                         st.metric("Successful", success_count, delta=f"{success_count/len(df)*100:.1f}%" if len(df) > 0 else "0%")
                     with col3:
                         st.metric("With Corrections", failure_count, delta=f"{failure_count/len(df)*100:.1f}%" if len(df) > 0 else "0%")
+
+                    # Graphs section
+                    st.markdown("---")
+                    st.subheader("📊 Model Performance Analytics")
+
+                    # Prepare data for time series
+                    df['created_at'] = pd.to_datetime(df['created_at'])
+                    df['minute'] = df['created_at'].dt.floor('T')  # Floor to minute
+                    df['is_success'] = df['success'].astype(int)
+                    df['is_correction'] = (~df['success']).astype(int)
+
+                    # Group by minute
+                    time_series = df.groupby('minute').agg({
+                        'is_success': 'sum',
+                        'is_correction': 'sum',
+                        'id': 'count'
+                    }).reset_index()
+                    time_series.columns = ['minute', 'successful', 'with_corrections', 'total']
+                    time_series['success_rate'] = (time_series['successful'] / time_series['total'] * 100).round(2)
+                    time_series['correction_rate'] = (time_series['with_corrections'] / time_series['total'] * 100).round(2)
+
+                    # Create two columns for graphs
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        # Bar chart: Successful vs With Corrections
+                        fig_bar = px.bar(
+                            x=['Successful', 'With Corrections'],
+                            y=[success_count, failure_count],
+                            title='Overall Performance',
+                            labels={'x': 'Status', 'y': 'Count'},
+                            color=['Successful', 'With Corrections'],
+                            color_discrete_map={'Successful': '#00cc00', 'With Corrections': '#ff4444'}
+                        )
+                        fig_bar.update_layout(showlegend=False, height=400)
+                        st.plotly_chart(fig_bar, use_container_width=True)
+
+                    with col2:
+                        # Pie chart: Success vs Corrections
+                        fig_pie = px.pie(
+                            values=[success_count, failure_count],
+                            names=['Successful', 'With Corrections'],
+                            title='Success vs Corrections Distribution',
+                            color_discrete_map={'Successful': '#00cc00', 'With Corrections': '#ff4444'}
+                        )
+                        fig_pie.update_layout(height=400)
+                        st.plotly_chart(fig_pie, use_container_width=True)
+
+                    # Time series: Evolution over time
+                    if len(time_series) > 0:
+                        st.markdown("---")
+                        st.subheader("📈 Evolution Over Time (by Minute)")
+
+                        # Create line chart for success rate and correction rate
+                        fig_time = go.Figure()
+
+                        fig_time.add_trace(go.Scatter(
+                            x=time_series['minute'],
+                            y=time_series['success_rate'],
+                            mode='lines+markers',
+                            name='Success Rate (%)',
+                            line=dict(color='#00cc00', width=2),
+                            marker=dict(size=6)
+                        ))
+
+                        fig_time.add_trace(go.Scatter(
+                            x=time_series['minute'],
+                            y=time_series['correction_rate'],
+                            mode='lines+markers',
+                            name='Correction Rate (%)',
+                            line=dict(color='#ff4444', width=2),
+                            marker=dict(size=6)
+                        ))
+
+                        fig_time.update_layout(
+                            title='Success Rate & Correction Rate Over Time',
+                            xaxis_title='Time (by Minute)',
+                            yaxis_title='Rate (%)',
+                            height=500,
+                            hovermode='x unified',
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+
+                        st.plotly_chart(fig_time, use_container_width=True)
+
+                        # Show time series data table
+                        with st.expander("View Time Series Data"):
+                            st.dataframe(time_series[['minute', 'total', 'successful', 'with_corrections', 'success_rate', 'correction_rate']], use_container_width=True, hide_index=True)
 
                 # Display logs in expandable sections
                 for log in logs:

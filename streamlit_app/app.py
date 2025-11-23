@@ -182,12 +182,6 @@ if st.session_state.extracted_data:
         original_fields = st.session_state.original_fields
         current_fields = st.session_state.current_fields
 
-        # Show modification summary before form (from previous submission)
-        if "current_fields" in st.session_state and st.session_state.current_fields:
-            prev_modified = get_modified_fields(original_fields, st.session_state.current_fields)
-            if prev_modified:
-                st.info(f"📝 **Previous check:** {len(prev_modified)} field(s) modified: {', '.join(prev_modified)}")
-
         with st.form("review_form"):
             st.subheader("Review Extracted Fields")
 
