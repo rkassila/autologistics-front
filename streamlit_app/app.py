@@ -115,6 +115,10 @@ if "document_hash" not in st.session_state:
     st.session_state.document_hash = None
 if "filename" not in st.session_state:
     st.session_state.filename = None
+if "original_fields" not in st.session_state:
+    st.session_state.original_fields = None
+if "current_fields" not in st.session_state:
+    st.session_state.current_fields = None
 
 # Show save success message if it exists
 if st.session_state.get("save_success", False):
@@ -167,20 +171,20 @@ if st.session_state.extracted_data:
         fields = result.get("structured_fields", {})
 
         # Initialize original_fields if not set (for backward compatibility)
-        if "original_fields" not in st.session_state:
+        if st.session_state.original_fields is None:
             st.session_state.original_fields = fields.copy()
 
         # Initialize current_fields to track form values
-        if "current_fields" not in st.session_state:
+        if st.session_state.current_fields is None:
             st.session_state.current_fields = fields.copy()
 
         # Show message if document already exists in DB - display BEFORE form
         if already_exists:
             st.warning("⚠️ document already in db", icon="⚠️")
 
-        # Get original fields for comparison
-        original_fields = st.session_state.original_fields
-        current_fields = st.session_state.current_fields
+        # Get original fields for comparison (ensure they're not None)
+        original_fields = st.session_state.original_fields or fields.copy()
+        current_fields = st.session_state.current_fields or fields.copy()
 
         with st.form("review_form"):
             st.subheader("Review Extracted Fields")
