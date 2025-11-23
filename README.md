@@ -2,6 +2,8 @@
 
 Streamlit frontend application for the Autologistics document processing system. Provides a user-friendly interface for uploading PDFs, reviewing extracted data, and monitoring model performance.
 
+**Backend Repository:** [autologistics](https://github.com/rkassila/autologistics)
+
 ## Features
 
 - PDF document upload and extraction
