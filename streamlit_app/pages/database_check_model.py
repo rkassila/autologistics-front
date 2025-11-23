@@ -49,20 +49,10 @@ try:
                 # Convert to DataFrame for easier display
                 df = pd.DataFrame(logs)
 
-                # Summary statistics
+                # Graphs section
                 if 'success' in df.columns:
                     success_count = df['success'].sum()
                     failure_count = len(df) - success_count
-
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Logs", total)
-                    with col2:
-                        st.metric("Successful", success_count, delta=f"{success_count/len(df)*100:.1f}%" if len(df) > 0 else "0%")
-                    with col3:
-                        st.metric("With Corrections", failure_count, delta=f"{failure_count/len(df)*100:.1f}%" if len(df) > 0 else "0%")
-
-                    # Graphs section
                     st.markdown("---")
                     st.subheader("📊 Model Performance Analytics")
 
